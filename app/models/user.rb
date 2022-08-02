@@ -5,14 +5,18 @@ class User < ApplicationRecord
                     format: { with: /\A[\w+\-.]+@[a-z\d\-.]+\.[a-z]+\z/i },
                     uniqueness: { case_sensitive: false }
   has_secure_password
-  
+
   has_many :microposts
-  # 自分がフォローしているUser」への参照 
   has_many :relationships
   has_many :followings, through: :relationships, source: :follow
-  # 自分をフォローしているUserへの参照
   has_many :reverses_of_relationship, class_name: 'Relationship', foreign_key: 'follow_id'
   has_many :followers, through: :reverses_of_relationship, source: :user
+
+  #お気に入り
+  has_many :favorites, dependent: :destroy
+  has_many :likes, through: :favorites, source: :micropost, dependent: :destroy
+  
+  
   
   def follow(other_user)
     unless self == other_user
@@ -29,8 +33,21 @@ class User < ApplicationRecord
     self.followings.include?(other_user)
   end
   
+  # タイムライン
   def feed_microposts
-    # Micropost.where(user_id: フォローユーザ + 自分自身)
     Micropost.where(user_id: self.following_ids + [self.id])
+  end
+  
+  def favorite(favorite_micropost)
+    self.favorites.find_or_create_by(micropost_id: favorite_micropost.id)
+  end
+  #お気に入り
+  def unfavorite(favorite_micropost)
+    favorite = self.favorites.find_by(micropost_id: favorite_micropost.id)
+    favorite.destroy if favorite
+  end
+
+  def favorite?(favorite_micropost)
+    self.likes.include?(favorite_micropost)
   end
 end

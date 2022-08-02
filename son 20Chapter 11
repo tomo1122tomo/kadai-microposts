@@ -1,0 +1,112 @@
+[1mdiff --git a/app/controllers/users_controller.rb b/app/controllers/users_controller.rb[m
+[1mindex 1b16b2d..8e75025 100644[m
+[1m--- a/app/controllers/users_controller.rb[m
+[1m+++ b/app/controllers/users_controller.rb[m
+[36m@@ -9,6 +9,10 @@[m [mclass UsersController < ApplicationController[m
+     @user = User.find(params[:id])[m
+     @pagy, @microposts = pagy(@user.microposts.order(id: :desc))[m
+     counts(@user)[m
+[32m+[m[32m    # お気に入り[m
+[32m+[m[32m     @microposts = @user.microposts[m
+[32m+[m[32m    favorites = Favorite.where(user_id: current_user.id).pluck(:micropost_id)[m
+[32m+[m[32m    @favorite_list = micropost.find(favorites)[m
+   end[m
+ [m
+   def new[m
+[1mdiff --git a/app/models/micropost.rb b/app/models/micropost.rb[m
+[1mindex c1cd79f..c5451d8 100644[m
+[1m--- a/app/models/micropost.rb[m
+[1m+++ b/app/models/micropost.rb[m
+[36m@@ -3,4 +3,6 @@[m [mclass Micropost < ApplicationRecord[m
+   [m
+   validates :content, presence: true, length: { maximum: 255 }[m
+   [m
+[32m+[m[32m  has_many :favorites, dependent: :destroy #お気に入り[m
+[32m+[m[41m  [m
+ end[m
+[1mdiff --git a/app/models/user.rb b/app/models/user.rb[m
+[1mindex 8518e64..d2a9c8a 100644[m
+[1m--- a/app/models/user.rb[m
+[1m+++ b/app/models/user.rb[m
+[36m@@ -14,6 +14,9 @@[m [mclass User < ApplicationRecord[m
+   has_many :reverses_of_relationship, class_name: 'Relationship', foreign_key: 'follow_id'[m
+   has_many :followers, through: :reverses_of_relationship, source: :user[m
+   [m
+[32m+[m[32m  has_many :favorites[m
+[32m+[m[32m  has_many :goods, through: :favorites, source: :micropost #自分がお気に入りしているpostを取得するという処理[m
+[32m+[m[41m  [m
+   def follow(other_user)[m
+     unless self == other_user[m
+       self.relationships.find_or_create_by(follow_id: other_user.id)[m
+[36m@@ -33,4 +36,19 @@[m [mclass User < ApplicationRecord[m
+     # Micropost.where(user_id: フォローユーザ + 自分自身)[m
+     Micropost.where(user_id: self.following_ids + [self.id])[m
+   end[m
+[32m+[m[41m  [m
+[32m+[m[32m  #お気に入り[m
+[32m+[m[32m  def favorite(micropost)[m
+[32m+[m[32m      self.favorites.find_or_create_by(micropost_id: micropost.id)[m
+[32m+[m[32m  end[m
+[32m+[m
+[32m+[m[32m  def unfavorite(micropost)[m
+[32m+[m[32m    favorite = self.favorites.find_by(micropost_id: micropost.id)[m
+[32m+[m[32m    favorite.destroy if favorite[m
+[32m+[m[32m  end[m
+[32m+[m[41m  [m
+[32m+[m[32m  #お気に入り登録、解除[m
+[32m+[m[32m  def favorited?(micropost)[m[41m [m
+[32m+[m[32m    self.favoritings.include?(micropost)[m
+[32m+[m[32m  end[m
+ end[m
+[1mdiff --git a/config/routes.rb b/config/routes.rb[m
+[1mindex 4ee3eb3..d125038 100644[m
+[1m--- a/config/routes.rb[m
+[1m+++ b/config/routes.rb[m
+[36m@@ -10,9 +10,14 @@[m [mRails.application.routes.draw do[m
+     member do[m
+       get :followings[m
+       get :followers[m
+[32m+[m[41m      [m
+[32m+[m[32m      get :goods[m
+     end[m
+   end[m
+ [m
+   resources :microposts, only: [:create, :destroy][m
+   resources :relationships, only: [:create, :destroy][m
+[32m+[m[32m  # お気に入り[m
+[32m+[m[32m  resources :favorites, only: [:create, :destroy][m
+[32m+[m
+ end[m
+\ No newline at end of file[m
+[1mdiff --git a/db/schema.rb b/db/schema.rb[m
+[1mindex a972d76..f2d42d1 100644[m
+[1m--- a/db/schema.rb[m
+[1m+++ b/db/schema.rb[m
+[36m@@ -10,7 +10,17 @@[m
+ #[m
+ # It's strongly recommended that you check this file into your version control system.[m
+ [m
+[31m-ActiveRecord::Schema.define(version: 2022_07_27_045707) do[m
+[32m+[m[32mActiveRecord::Schema.define(version: 2022_07_27_123222) do[m
+[32m+[m
+[32m+[m[32m  create_table "favorites", charset: "utf8mb4", force: :cascade do |t|[m
+[32m+[m[32m    t.bigint "user_id", null: false[m
+[32m+[m[32m    t.bigint "micropost_id", null: false[m
+[32m+[m[32m    t.datetime "created_at", precision: 6, null: false[m
+[32m+[m[32m    t.datetime "updated_at", precision: 6, null: false[m
+[32m+[m[32m    t.index ["micropost_id"], name: "index_favorites_on_micropost_id"[m
+[32m+[m[32m    t.index ["user_id", "micropost_id"], name: "index_favorites_on_user_id_and_micropost_id", unique: true[m
+[32m+[m[32m    t.index ["user_id"], name: "index_favorites_on_user_id"[m
+[32m+[m[32m  end[m
+ [m
+   create_table "microposts", charset: "utf8mb4", force: :cascade do |t|[m
+     t.string "content"[m
+[36m@@ -38,6 +48,8 @@[m [mActiveRecord::Schema.define(version: 2022_07_27_045707) do[m
+     t.datetime "updated_at", precision: 6, null: false[m
+   end[m
+ [m
+[32m+[m[32m  add_foreign_key "favorites", "microposts"[m
+[32m+[m[32m  add_foreign_key "favorites", "users"[m
+   add_foreign_key "microposts", "users"[m
+   add_foreign_key "relationships", "users"[m
+   add_foreign_key "relationships", "users", column: "follow_id"[m
